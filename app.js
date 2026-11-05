@@ -28,13 +28,98 @@ $('platformStats').innerHTML=platforms.map(p=>{const subs=items.filter(i=>i.plat
 const months=[];for(let n=5;n>=0;n--){const d=new Date(start.getFullYear(),start.getMonth()-n,1);const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');const amount=purchased.filter(i=>i.purchaseDate?.startsWith(key)).reduce((s,i)=>s+itemPaid(i),0);months.push({key,amount})}const peak=Math.max(1,...months.map(m=>m.amount));$('monthlyStats').innerHTML=months.map(m=>`<div class="platform-row"><span style="width:55px">${esc(m.key.slice(5))}月</span><div class="bartrack"><div class="bar" style="width:${(m.amount/peak*100).toFixed(1)}%"></div></div><span style="width:95px;text-align:right">${money(m.amount)}</span></div>`).join('')}
 function empty(title,sub){return `<div class="empty"><div style="font-size:32px">♡</div><strong>${title}</strong><span>${sub}</span></div>`}
 function switchTab(name){tab=name;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.id===name));document.querySelectorAll('.navitem').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));$('heading').textContent=({home:'我的购物',list:'购物清单',stats:'购物统计',settings:'设置与备份'})[name];window.scrollTo({top:0,behavior:'instant'})}
-function parseShare(text){const normalized=text.replace(/&amp;/g,'&').replace(/[，。；）】\s]+$/g,'');const raw=normalized.match(/https?:\/\/[^\s\u3000<>"'，。；）】]+/i);let url=raw?raw[0].replace(/[.,;!?]+$/,''):'';let host='';try{host=new URL(url).hostname.toLowerCase()}catch{}
-let platform='其他';if(/(^|\.)(taobao\.com|tmall\.com|tb\.cn)$/.test(host))platform='淘宝';else if(/(^|\.)(jd\.com|3\.cn)$/.test(host))platform='京东';else if(/(^|\.)(pinduoduo\.com|yangkeduo\.com|pdd\.cn)$/.test(host))platform='拼多多';else if(/(^|\.)(douyin\.com|iesdouyin\.com|jinritemai\.com)$/.test(host))platform='抖音';
-let title=normalized.replace(/https?:\/\/[^\s\u3000<>"'，。；）】]+/ig,' ').replace(/^[\s【\[]*(?:复制这条信息|打开.*?(?:查看|看看)|长按复制|点击链接|商品链接|分享链接)[:：]?/,'').replace(/[\s\u3000]+/g,' ').trim();title=title.replace(/(?:[￥¥]\s?\d+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?\s?元)/g,'').replace(/(?:复制.*?(?:打开|浏览器)|打开.*?app.*?查看).*$/i,'').trim().slice(0,150);
-const candidates=[...normalized.matchAll(/(?:[￥¥]\s*|(?:售价|价格|到手价|实付价)[:：]?\s*)(\d{1,7}(?:\.\d{1,2})?)/g)].map(m=>m[1]);return {url,platform,title,price:candidates.length?candidates[0]:''}}
+function parseShare(text){
+ const normalized=String(text||'').replace(/&amp;/gi,'&').trim();
+ const raw=normalized.match(/https?:\/\/[^\s\u3000<>"'，。；）】]+/i);
+ const url=raw?raw[0].replace(/[.,;!?，。；]+$/,''):'';
+ let host='';try{host=new URL(url).hostname.toLowerCase()}catch{}
+ let platform='其他';
+ if(/(^|\.)(taobao\.com|tmall\.com|tb\.cn)$/.test(host))platform='淘宝';
+ else if(/(^|\.)(jd\.com|3\.cn)$/.test(host))platform='京东';
+ else if(/(^|\.)(pinduoduo\.com|yangkeduo\.com|pdd\.cn)$/.test(host))platform='拼多多';
+ else if(/(^|\.)(douyin\.com|iesdouyin\.com|jinritemai\.com|douyinpay\.com)$/.test(host))platform='抖音';
+ if(platform==='其他'){
+  if(/【抖音商城】|抖音商城|打开抖音|抖音商品/.test(normalized))platform='抖音';
+  else if(/淘宝|天猫|淘口令/.test(normalized))platform='淘宝';
+  else if(/京东|京口令/.test(normalized))platform='京东';
+  else if(/拼多多|拼口令/.test(normalized))platform='拼多多';
+ }
+ let title=normalized.replace(/https?:\/\/[^\s\u3000<>"'，。；）】]+/ig,' ')
+  .replace(/[\r\n]+/g,' ').replace(/\s+/g,' ').trim();
+ // 抖音常见分享结构：9.79 JJi:/ 11/25 @ABC 【抖音商城】 商品标题 ...
+ if(/【抖音商城】/.test(title))title=title.slice(title.indexOf('【抖音商城】')+'【抖音商城】'.length);
+ title=title
+  .replace(/^(?:\d+(?:\.\d+)?\s+)?[A-Za-z0-9]{2,12}:\/\s*(?:\d{1,2}\/\d{1,2})?\s*(?:@[\w.\-]+)?\s*/,'')
+  .replace(/^(?:\d+(?:\.\d+)?\s+)?(?:\d{1,2}\/\d{1,2}\s+)?(?:@[\w.\-]+\s*)+/,'')
+  .replace(/^(?:【(?:抖音商城|淘宝|天猫|京东|拼多多)】\s*)+/,'')
+  .replace(/^(?:(?:复制这条信息|复制口令|长按复制|点击链接|商品链接|分享链接|打开(?:抖音|淘宝|京东|拼多多)(?:商城)?(?:APP|App|app)?(?:，|,)?(?:搜索|查看|看看)?)[：:\s]*)+/,'')
+  .replace(/(?:复制.*?(?:打开|浏览器)|(?:打开|前往)(?:抖音|淘宝|京东|拼多多)(?:商城)?(?:APP|app)?(?:，|,)?(?:搜索|查看|看看)|长按复制|点击链接).*$/i,'')
+  .replace(/(?:[￥¥]\s?\d+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?\s?元)/g,' ')
+  .replace(/^[\s，,。:：;；【】]+|[\s，,。:：;；【】]+$/g,'')
+  .replace(/\s+/g,' ').trim().slice(0,150);
+ // 仅识别带价格标志的数字，口令中的 9.79 不属于商品价格。
+ const matches=[...normalized.matchAll(/(?:[￥¥]\s*|(?:到手价|实付价|售价|价格|券后价)\s*[:：]?\s*)(\d{1,7}(?:\.\d{1,2})?)/g)];
+ return {url,platform,title,price:matches.length?matches[0][1]:''};
+}
+// 可选：仅传递单条公开商品 URL 给用户自建 Worker；不传本地清单和账户信息。
+let lookupNonce=0, shareTimer;
+const getEndpoint=()=>localStorage.getItem('maimaiji-metadata-endpoint')||'';
+function normalizedEndpoint(raw){
+ if(!raw.trim())return '';
+ const u=new URL(raw.trim());
+ if(u.protocol!=='https:'||u.username||u.password||!(/\.workers\.dev$/.test(u.hostname)||u.hostname==='localhost'))throw new Error('请填写 HTTPS 的 workers.dev 地址');
+ return u.origin;
+}
+async function fetchProductMetadata(productUrl){
+ const endpoint=getEndpoint();
+ if(!endpoint)return {ok:false,reason:'尚未配置商品读取服务，请先在设置中填写 Worker 地址'};
+ const u=new URL(productUrl);
+ if(!/^https?:$/.test(u.protocol))return {ok:false,reason:'商品链接格式无效'};
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),12000);
+ try{
+  const res=await fetch(endpoint+'/?url='+encodeURIComponent(productUrl),{signal:controller.signal,cache:'no-store'});
+  const data=await res.json();
+  if(!res.ok||!data.ok)return {ok:false,reason:data.reason||'平台未返回可用商品资料'};
+  return data;
+ }catch(e){return {ok:false,reason:e.name==='AbortError'?'读取超时，请稍后重试':'服务不可用或网络受限'};}
+ finally{clearTimeout(timeout)}
+}
+async function applyParseEnhanced(quiet=false){
+ const txt=val('shareText')||val('urlInput');
+ if(!txt){if(!quiet)notify('请先粘贴分享内容');return}
+ const p=parseShare(txt);const nonce=++lookupNonce;
+ if(p.url)$('urlInput').value=p.url;
+ if(p.platform!=='其他')$('platformInput').value=p.platform;
+ // 纯 URL 不会被当成商品名称。
+ if(p.title&&!val('titleInput'))$('titleInput').value=p.title;
+ if(p.price&&!val('listPriceInput'))$('listPriceInput').value=p.price;
+ updatePreview();
+ if(!p.url){$('parseNote').textContent='没有找到商品链接，可以手动填写';if(!quiet)notify('已读取可识别的分享文字');return}
+ if(!getEndpoint()){
+  $('parseNote').textContent='已识别'+p.platform+'链接。纯链接需先在设置中配置免费读取服务';
+  if(!quiet)notify('链接已识别，尚未配置商品读取服务');return;
+ }
+ $('parseNote').textContent='正在尝试读取 '+p.platform+' 公开商品资料…';
+ $('parseShare').disabled=true;
+ const r=await fetchProductMetadata(p.url);
+ if(nonce!==lookupNonce)return;
+ $('parseShare').disabled=false;
+ if(r.ok){
+  if(r.title&&!val('titleInput'))$('titleInput').value=r.title.slice(0,180);
+  if(r.price!=null&&r.price!==''&&!val('listPriceInput'))$('listPriceInput').value=String(r.price);
+  // 远程图片不存到数据库，避免在联网/失效时伪装成已保存。
+  if(r.image)$('parseNote').textContent='读取到商品图链接，但本版请手动上传图片保存到本机';
+  else $('parseNote').textContent='读取完成，请核实商品规格及价格；会员券需手填';
+  updatePreview();if(!quiet)notify(r.title?'已填入可识别商品资料':'平台未提供名称，请手动填写');
+ }else{
+  $('parseNote').textContent=r.reason+'。可继续手动填写并保存';
+  if(!quiet)notify('未能自动读取：'+r.reason);
+ }
+}
 function editorData(){return {title:val('titleInput'),platform:val('platformInput'),status:val('statusInput'),url:val('urlInput'),category:val('categoryInput'),priority:val('priorityInput'),listPrice:val('listPriceInput'),memberPrice:val('memberPriceInput'),coupon:val('couponInput'),otherDiscount:val('otherDiscountInput'),shipping:val('shippingInput'),manualEstimate:val('manualEstimateInput'),paid:val('paidInput'),refund:val('refundInput'),qty:Math.max(1,Math.floor(num(val('qtyInput'))||1)),plannedDate:val('plannedDateInput'),purchaseDate:val('purchaseDateInput'),order:val('orderInput'),notes:val('notesInput'),shareText:val('shareText'),image:imageData}}
 function updatePreview(){const data=editorData();$('autoPrice').textContent=money(autoEstimate(data)*data.qty);$('finalPrice').textContent=money(estimate(data)*data.qty)}
-function openEditor(id=null){editing=id;fields.forEach(key=>{const el=$(key);el.value=''});$('qtyInput').value='1';$('platformInput').value='淘宝';$('statusInput').value='want';$('priorityInput').value='normal';imageData=null;$('imageInput').value='';$('itemActions').style.display=id?'flex':'none';$('editorTitle').textContent=id?'编辑商品':'添加商品';if(id){const i=items.find(x=>x.id===id);if(!i)return;const mapping={shareText:'shareText',titleInput:'title',platformInput:'platform',statusInput:'status',urlInput:'url',categoryInput:'category',priorityInput:'priority',listPriceInput:'listPrice',memberPriceInput:'memberPrice',couponInput:'coupon',otherDiscountInput:'otherDiscount',shippingInput:'shipping',manualEstimateInput:'manualEstimate',paidInput:'paid',refundInput:'refund',qtyInput:'qty',plannedDateInput:'plannedDate',purchaseDateInput:'purchaseDate',orderInput:'order',notesInput:'notes'};Object.entries(mapping).forEach(([key,prop])=>$(key).value=i[prop]??'');imageData=i.image||null}updatePreview();$('editorOverlay').classList.remove('hidden');document.body.style.overflow='hidden';$('parseNote').textContent='仅提取分享文本，不读取购物账号'}
+function openEditor(id=null){editing=id;fields.forEach(key=>{const el=$(key);el.value=''});$('qtyInput').value='1';$('platformInput').value='淘宝';$('statusInput').value='want';$('priorityInput').value='normal';imageData=null;$('imageInput').value='';$('itemActions').style.display=id?'flex':'none';$('editorTitle').textContent=id?'编辑商品':'添加商品';if(id){const i=items.find(x=>x.id===id);if(!i)return;const mapping={shareText:'shareText',titleInput:'title',platformInput:'platform',statusInput:'status',urlInput:'url',categoryInput:'category',priorityInput:'priority',listPriceInput:'listPrice',memberPriceInput:'memberPrice',couponInput:'coupon',otherDiscountInput:'otherDiscount',shippingInput:'shipping',manualEstimateInput:'manualEstimate',paidInput:'paid',refundInput:'refund',qtyInput:'qty',plannedDateInput:'plannedDate',purchaseDateInput:'purchaseDate',orderInput:'order',notesInput:'notes'};Object.entries(mapping).forEach(([key,prop])=>$(key).value=i[prop]??'');imageData=i.image||null}updatePreview();$('editorOverlay').classList.remove('hidden');document.body.style.overflow='hidden';$('parseNote').textContent='分享文字直接识别；纯商品链接需配置读取服务'}
 function closeEditor(){$('editorOverlay').classList.add('hidden');document.body.style.overflow=''}
 async function compressImage(file){return new Promise((resolve,reject)=>{if(!file){resolve(null);return}const img=new Image();const url=URL.createObjectURL(file);img.onload=()=>{const ratio=Math.min(1,700/Math.max(img.width,img.height));const canvas=document.createElement('canvas');canvas.width=Math.round(img.width*ratio);canvas.height=Math.round(img.height*ratio);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);URL.revokeObjectURL(url);resolve(canvas.toDataURL('image/jpeg',.72))};img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('图片无法读取'))};img.src=url})}
 function applyParse(){const txt=val('shareText');if(!txt){notify('请先粘贴分享内容');return}const p=parseShare(txt);if(p.url)$('urlInput').value=p.url;if(p.platform!=='其他')$('platformInput').value=p.platform;if(p.title&&!val('titleInput'))$('titleInput').value=p.title;if(p.price&&!val('listPriceInput'))$('listPriceInput').value=p.price;$('parseNote').textContent=p.url?`识别到${p.platform}链接；价格来自分享文本，需核实`:'未找到标准链接，仍可手动填写';updatePreview();notify(p.url?'已提取可识别的信息':'无法识别链接，可手动填写')}
@@ -45,5 +130,5 @@ function csvEscape(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
 function exportCSV(){const cols=['title','platform','status','url','category','priority','listPrice','memberPrice','coupon','otherDiscount','shipping','manualEstimate','paid','refund','qty','plannedDate','purchaseDate','order','notes'];const rows=[cols.join(','),...items.map(i=>cols.map(c=>csvEscape(i[c])).join(','))];download(new Blob(['\uFEFF'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'}),'买买记-购物清单.csv')}
 async function importJSON(file){try{const text=await file.text();const data=JSON.parse(text);if(!data||!Array.isArray(data.items)||data.items.length>5000)throw Error('文件格式不正确或商品超过5000件');if(!confirm(`将导入 ${data.items.length} 件商品，同ID记录会被替换。确定继续吗？`))return;let count=0;for(const i of data.items){if(!i||typeof i.title!=='string'||!i.title.trim()||!i.id||typeof i.id!=='string')continue;const safe={...i,title:i.title.slice(0,180),image:typeof i.image==='string'&&i.image.startsWith('data:image/')?i.image:null,updatedAt:i.updatedAt||new Date().toISOString()};await write(safe);count++}await refresh();notify(`成功导入 ${count} 件商品`)}catch(e){notify('导入失败：'+e.message)}}
 function openLink(){const u=val('urlInput');if(!u){notify('此商品没有链接');return}try{const x=new URL(u);if(!['https:','http:'].includes(x.protocol))throw Error();window.open(x.href,'_blank','noopener,noreferrer')}catch{notify('链接格式不正确')}}
-function setup(){document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));$('addTop').addEventListener('click',()=>openEditor());$('navAdd').addEventListener('click',()=>openEditor());$('closeEditor').addEventListener('click',closeEditor);$('editorOverlay').addEventListener('click',e=>{if(e.target===$('editorOverlay'))closeEditor()});$('parseShare').addEventListener('click',applyParse);$('saveItem').addEventListener('click',()=>saveEditor().catch(e=>notify('保存失败：'+e.message)));$('openProduct').addEventListener('click',openLink);$('deleteItem').addEventListener('click',async()=>{if(!editing||!confirm('确定永久删除这件商品吗？'))return;await erase(editing);closeEditor();await refresh();notify('已删除')});$('imageInput').addEventListener('change',async e=>{const file=e.target.files?.[0];if(file)try{imageData=await compressImage(file);notify('图片已添加，将保存在本地')}catch{notify('图片处理失败')}});['listPriceInput','memberPriceInput','couponInput','otherDiscountInput','shippingInput','manualEstimateInput','qtyInput'].forEach(id=>$(id).addEventListener('input',updatePreview));$('search').addEventListener('input',render);$('filters').addEventListener('click',e=>{const btn=e.target.closest('[data-status]');if(!btn)return;filter=btn.dataset.status;document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('selected',x===btn));render()});document.addEventListener('click',e=>{const b=e.target.closest('[data-edit]');if(b)openEditor(b.dataset.edit)});$('exportBtn').addEventListener('click',exportJSON);$('exportCsvBtn').addEventListener('click',exportCSV);$('importBtn').addEventListener('click',()=>$('importFile').click());$('importFile').addEventListener('change',async e=>{if(e.target.files?.[0])await importJSON(e.target.files[0]);e.target.value=''});const params=new URLSearchParams(location.search);const shared=params.get('text')||params.get('url');if(shared){openEditor();$('shareText').value=shared;applyParse();history.replaceState({},'',location.pathname)}}
+function setup(){document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));$('addTop').addEventListener('click',()=>openEditor());$('navAdd').addEventListener('click',()=>openEditor());$('closeEditor').addEventListener('click',closeEditor);$('editorOverlay').addEventListener('click',e=>{if(e.target===$('editorOverlay'))closeEditor()});$('parseShare').addEventListener('click',()=>applyParseEnhanced());$('saveEndpoint').addEventListener('click',()=>{try{const u=normalizedEndpoint(val('metadataEndpoint'));if(u)localStorage.setItem('maimaiji-metadata-endpoint',u);else localStorage.removeItem('maimaiji-metadata-endpoint');notify(u?'读取服务地址已保存':'已关闭读取服务')}catch(e){notify(e.message)}});$('metadataEndpoint').value=getEndpoint();$('shareText').addEventListener('input',()=>{clearTimeout(shareTimer);shareTimer=setTimeout(()=>{const txt=val('shareText');if(/https?:\/\//.test(txt))applyParseEnhanced(true)},850)});$('saveItem').addEventListener('click',()=>saveEditor().catch(e=>notify('保存失败：'+e.message)));$('openProduct').addEventListener('click',openLink);$('deleteItem').addEventListener('click',async()=>{if(!editing||!confirm('确定永久删除这件商品吗？'))return;await erase(editing);closeEditor();await refresh();notify('已删除')});$('imageInput').addEventListener('change',async e=>{const file=e.target.files?.[0];if(file)try{imageData=await compressImage(file);notify('图片已添加，将保存在本地')}catch{notify('图片处理失败')}});['listPriceInput','memberPriceInput','couponInput','otherDiscountInput','shippingInput','manualEstimateInput','qtyInput'].forEach(id=>$(id).addEventListener('input',updatePreview));$('search').addEventListener('input',render);$('filters').addEventListener('click',e=>{const btn=e.target.closest('[data-status]');if(!btn)return;filter=btn.dataset.status;document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('selected',x===btn));render()});document.addEventListener('click',e=>{const b=e.target.closest('[data-edit]');if(b)openEditor(b.dataset.edit)});$('exportBtn').addEventListener('click',exportJSON);$('exportCsvBtn').addEventListener('click',exportCSV);$('importBtn').addEventListener('click',()=>$('importFile').click());$('importFile').addEventListener('change',async e=>{if(e.target.files?.[0])await importJSON(e.target.files[0]);e.target.value=''});const params=new URLSearchParams(location.search);const shared=params.get('text')||params.get('url');if(shared){openEditor();$('shareText').value=shared;applyParseEnhanced(true);history.replaceState({},'',location.pathname)}}
 (async()=>{try{db=await openDB();setup();await refresh();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(()=>{})}catch(e){alert('无法打开本地数据库，请确认浏览器允许网站存储：'+e.message)}})();
